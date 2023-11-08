@@ -25,6 +25,7 @@ extern crate regex;
 use std::collections::HashSet;
 use std::io::BufRead;
 use std::os::linux::fs::MetadataExt;
+//use std::os::macos::fs::MetadataExt;
 use regex::Regex;
 
 extern crate glob;
@@ -804,6 +805,14 @@ fn exist_audio() -> ExistResult {
     Ok(*audio_alsa.as_ref().unwrap_or(&false) || *audio_pulseaudio.as_ref().unwrap_or(&false))
 }
 
+fn exist_cuda_compute_apps() -> ExistResult{
+    let cuda_app_output = Command::new("nvidia-smi")
+        .args(["--query-compute-apps", "pid", "--format=csv,noheader,nounits"])
+        .output()?;
+    let output_str = String::from_utf8(cuda_app_output.stdout)?;
+    Ok(output_str.is_empty())
+}
+
 #[derive(Parser)]
 #[command(author, version, about, long_about)]
 #[command(help_template = "\
@@ -1107,12 +1116,14 @@ fn main() {
     // override user locale to make all command outputs uniform (e.g. when parsing column headers or dates/times)
     std::env::set_var("LC_ALL", "C");
 
-    if launch_opts.test {
+    let test = true;
+    if test {
         println!("Got --test: running idle test and exiting.");
         let start = time::OffsetDateTime::now_utc().unix_timestamp();
         let idle = test_idle(&config, start);
         let tests = test_nonidle(&config);
         println!("Idle Detection Summary:\n{}{}", idle, tests);
+
         std::process::exit(0);
     }
 
