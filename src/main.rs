@@ -805,12 +805,12 @@ fn exist_audio() -> ExistResult {
     Ok(*audio_alsa.as_ref().unwrap_or(&false) || *audio_pulseaudio.as_ref().unwrap_or(&false))
 }
 
-fn exist_cuda_compute_apps() -> ExistResult{
+fn exist_cuda_compute_apps() -> ExistResult {
     let cuda_app_output = Command::new("nvidia-smi")
         .args(["--query-compute-apps", "pid", "--format=csv,noheader,nounits"])
         .output()?;
     let output_str = String::from_utf8(cuda_app_output.stdout)?;
-    Ok(output_str.is_empty())
+    Ok(!output_str.is_empty())
 }
 
 #[derive(Parser)]
@@ -1082,7 +1082,7 @@ fn reschedule_auto_wake(auto_wake: Option<&String>, current_epoch: Option<AutoWa
 }
 
 #[allow(dead_code)]
-fn test() {
+fn test_stuff() {
     println!("Sec: {:?}", parse_w_time("10.45s"));
     println!("Sec: {:?}", parse_w_time("1:11"));
     println!("Sec: {:?}", parse_w_time("0:10m"));
@@ -1095,6 +1095,8 @@ fn test() {
     println!("nfs: {:?}", exist_net_connection(NetConnection::NFS));
     println!("iotop: {:?}", exist_process("^iotop$"));
     println!("audio: {:?}", exist_audio());
+    println!("cuda: {:?}", exist_cuda_compute_apps());
+    
 }
 
 fn main() {
@@ -1124,6 +1126,7 @@ fn main() {
         let tests = test_nonidle(&config);
         println!("Idle Detection Summary:\n{}{}", idle, tests);
 
+        test_stuff();
         std::process::exit(0);
     }
 
