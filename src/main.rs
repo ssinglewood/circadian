@@ -25,7 +25,6 @@ extern crate regex;
 use std::collections::HashSet;
 use std::io::BufRead;
 use std::os::linux::fs::MetadataExt;
-//use std::os::macos::fs::MetadataExt;
 use regex::Regex;
 
 extern crate glob;
@@ -245,6 +244,8 @@ struct NonIdleResponse {
     audio_enabled: bool,
     procs: ExistResult,
     procs_enabled: bool,
+    cuda: ExistResult,
+    cuda_enabled: bool,
     is_blocked: bool,
 }
 impl std::fmt::Display for NonIdleResponse {
@@ -256,6 +257,7 @@ impl std::fmt::Display for NonIdleResponse {
             (self.nfs.as_ref(), self.nfs_enabled, "NFS"),
             (self.audio.as_ref(), self.audio_enabled, "Audio"),
             (self.procs.as_ref(), self.procs_enabled, "Processes"),
+            (self.cuda.as_ref(), self.cuda_enabled, "Cuda compute"),
         ];
         for (var,enabled,name) in result_map {
             let s = match var {
@@ -812,7 +814,6 @@ fn exist_cuda_compute_apps() -> ExistResult {
     let output_str = String::from_utf8(cuda_app_output.stdout)?;
     Ok(!output_str.is_empty())
 }
-
 #[derive(Parser)]
 #[command(author, version, about, long_about)]
 #[command(help_template = "\
@@ -844,6 +845,7 @@ struct CircadianConfig {
     smb_block: bool,
     nfs_block: bool,
     audio_block: bool,
+    cuda_block: bool,
     max_cpu_load: Option<f64>,
     process_block: Vec<String>,
 }
@@ -895,6 +897,7 @@ fn read_config(file_path: &str) -> Result<CircadianConfig, CircadianError> {
         config.smb_block = read_bool(section, "smb_block");
         config.nfs_block = read_bool(section, "nfs_block");
         config.audio_block = read_bool(section, "audio_block");
+        config.cuda_block = read_bool(section, "cuda_block");
         config.max_cpu_load = section.get("max_cpu_load")
             .and_then(|x| if x.len() > 0
                       {Some(x.parse::<f64>().unwrap_or(999.0))} else {None});
@@ -963,13 +966,16 @@ fn test_nonidle(config: &CircadianConfig) -> NonIdleResponse {
     // Flatten Vec of bools into a single bool
         .map(|x| x.iter().fold(false, |acc,p| acc || *p));
     let procs_enabled = config.process_block.len() > 0;
+    let cuda: Result<bool, CircadianError> = exist_cuda_compute_apps();
+    let cuda_enabled: bool = config.cuda_block;
 
     let blocked = (cpu_load_enabled && *cpu_load.as_ref().unwrap_or(&true)) ||
         (ssh_enabled && *ssh.as_ref().unwrap_or(&true)) ||
         (smb_enabled && *smb.as_ref().unwrap_or(&true)) ||
         (nfs_enabled && *nfs.as_ref().unwrap_or(&true)) ||
         (audio_enabled && *audio.as_ref().unwrap_or(&true)) ||
-        (procs_enabled && *procs.as_ref().unwrap_or(&true));
+        (procs_enabled && *procs.as_ref().unwrap_or(&true)) ||
+        (cuda_enabled && *cuda.as_ref().unwrap_or(&true));
     NonIdleResponse {
         cpu_load: cpu_load,
         cpu_load_enabled: cpu_load_enabled,
@@ -983,6 +989,8 @@ fn test_nonidle(config: &CircadianConfig) -> NonIdleResponse {
         audio_enabled: audio_enabled,
         procs: procs,
         procs_enabled: procs_enabled,
+        cuda: cuda,
+        cuda_enabled: cuda_enabled,
         is_blocked: blocked,
     }
 }
@@ -1082,7 +1090,7 @@ fn reschedule_auto_wake(auto_wake: Option<&String>, current_epoch: Option<AutoWa
 }
 
 #[allow(dead_code)]
-fn test_stuff() {
+fn test() {
     println!("Sec: {:?}", parse_w_time("10.45s"));
     println!("Sec: {:?}", parse_w_time("1:11"));
     println!("Sec: {:?}", parse_w_time("0:10m"));
@@ -1118,15 +1126,13 @@ fn main() {
     // override user locale to make all command outputs uniform (e.g. when parsing column headers or dates/times)
     std::env::set_var("LC_ALL", "C");
 
-    let test = true;
-    if test {
+    if launch_opts.test {
         println!("Got --test: running idle test and exiting.");
         let start = time::OffsetDateTime::now_utc().unix_timestamp();
         let idle = test_idle(&config, start);
         let tests = test_nonidle(&config);
         println!("Idle Detection Summary:\n{}{}", idle, tests);
 
-        test_stuff();
         std::process::exit(0);
     }
 
@@ -1156,6 +1162,10 @@ fn main() {
         }
     if config.audio_block && (exist_audio_alsa().is_err() && exist_audio_pulseaudio().is_err())  {
         println!("'/proc/asound/' and pactl required by audio_block is unreadable. Exiting.");
+        std::process::exit(1);
+    }
+    if config.cuda_block && (exist_cuda_compute_apps().is_err())  {
+        println!("'nvidia-smi' command required by cuda compute application block failed. Exiting.");
         std::process::exit(1);
     }
     if config.process_block.len() > 0 && exist_process("").is_err() {

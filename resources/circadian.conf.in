@@ -76,6 +76,15 @@ nfs_block = no
 # Default: yes
 audio_block = yes
 
+# Whether active compute applications running on GPU block the system from 
+# being considered idle.  
+#
+# Monitors and parses output from nvidia-smi (available in the nvidia cuda toolkit).
+#
+# Default: no
+cuda_block = no
+
+
 # Max CPU load for the past minute to be considered idle.  This is the
 # unscaled load, can go above 1.0 even on non-maxed multi-core systems.
 # Set to 999.0 or comment out to disable.
