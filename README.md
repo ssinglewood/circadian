@@ -17,6 +17,7 @@ Circadian uses a suite of 'idle heuristics' to determine when a system is idle. 
  * Active audio playback
  * CPU usage below specified threshold
  * Blacklisted processes
+ * CUDA compute tasks running on an Nvidia GPU
 
 When all of its heuristics determine that your system has been idle for long enough, Circadian will execute a command.  This is typically a simple power suspend, but it can be configured to any desired action.
 
@@ -48,10 +49,10 @@ Circadian exists because modern Linux distros already support suspend-on-idle, b
 $ sudo dpkg -i circadian_0.6.0-1_amd64.deb
 ```
 
-If desired, install tooling to detect network (`netstat`), X11 (`xssstate` and`xprintidle`), audio activity (`pactl`):
+If desired, install tooling to detect network (`netstat`), X11 (`xssstate` and`xprintidle`), audio activity (`pactl`), CUDA compute tasks (`nvidia-smi`):
 
 ```
-$ sudo apt-get install suckless-tools xprintidle net-tools pulseaudio-utils
+$ sudo apt-get install suckless-tools xprintidle net-tools pulseaudio-utils nvidia-cuda-toolkit
 ```
 
 Edit `/etc/circadian.conf` to configure.  The default is to suspend with systemd after 2 hours of idle.
@@ -99,6 +100,7 @@ Follow systemd instructions, and port circadian.service to whatever format you w
     * xprintidle
     * netstat
     * pactl
+    * nvidia-smi
     * rustc + cargo (if building locally)
 * Should already have
     * grep
